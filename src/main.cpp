@@ -24,14 +24,27 @@ InterruptIn int2(PA_2,PullDown);
 #define DATA_READY_FLAG 2
 
 
+#define BUFFER_SIZE 3 * 400 // 400 points, 3 axis
+
+#define THRESHOLD 600
+
+
 uint8_t write_buf[32];
 uint8_t read_buf[32];
 
 
 // Init this array as 0
-float key_buffer[1200] = {0};
+float key_buffer[BUFFER_SIZE] = {0};
 
 int key_buffer_index = 0; // Used to index the key_buffer.
+
+
+// Real time value buffer
+float real_time_buffer[BUFFER_SIZE] = {0};
+
+int real_time_buffer_index = 0; // Used to index the real_time_buffer.
+
+
 
 EventFlags flags;
 //The spi.transfer function requires that the callback
@@ -59,9 +72,28 @@ void get_data(uint8_t* read_buf, float& gx, float& gy, float& gz) {
   gz=((float)raw_gz)*(17.5f*0.017453292519943295769236907684886f / 1000.0f);
 }
 
+inline int avoid_overflow(int original) {
+  if (original >= BUFFER_SIZE) {
+    original -= BUFFER_SIZE;
+  }
+  return original;
+}
+
+bool match_data() {
+  float sum{0};
+  for (int i = 0; i < BUFFER_SIZE; ++i) {
+    sum += (key_buffer[i] - real_time_buffer[avoid_overflow(i + real_time_buffer_index)]) * 
+    (key_buffer[i] - real_time_buffer[avoid_overflow(i++ + real_time_buffer_index)]);
+  }
+  // printf("Sum: %f\n", sum);
+  return sum < THRESHOLD;
+}
+
 
 void record_key(){
+  key_buffer_index = 0;
   float gx, gy, gz;
+  float sum{0};
   while(1) {
     //wait until new sample is ready
     flags.wait_all(DATA_READY_FLAG);
@@ -73,11 +105,43 @@ void record_key(){
     flags.wait_all(SPI_FLAG);
 
     get_data(read_buf, gx, gy, gz);
-    if (key_buffer_index < 1200) {
+    if (key_buffer_index < BUFFER_SIZE) {
       key_buffer[key_buffer_index++] = gx;
       key_buffer[key_buffer_index++] = gy;
       key_buffer[key_buffer_index++] = gz;
-    } else break;
+      sum += gx * gx + gy * gy + gz * gz;
+    } else {
+      printf("Recorded Sum: %f\n", sum);
+      break;
+    }
+  }
+}
+
+void updata_real_time_buffer() {
+  float gx, gy, gz;
+  get_data(read_buf, gx, gy, gz);
+
+  if(real_time_buffer_index >= BUFFER_SIZE) {
+    real_time_buffer_index = 0;
+  }
+  real_time_buffer[real_time_buffer_index++] = gx;
+
+  if(real_time_buffer_index >= BUFFER_SIZE) {
+    real_time_buffer_index = 0;
+  }
+  real_time_buffer[real_time_buffer_index++] = gy;
+
+  if(real_time_buffer_index >= BUFFER_SIZE) {
+    real_time_buffer_index = 0;
+  }
+  real_time_buffer[real_time_buffer_index++] = gz;
+}
+
+void print_key_value(){
+  // // print the key_buffer
+  for(int i =0; i < 400; i++) {
+    // print gx gy gz individually
+    printf("point %d: gx %f gy %f gz %f\n", i, key_buffer[i++], key_buffer[i++], key_buffer[i++]);
   }
 }
 
@@ -122,55 +186,32 @@ int main() {
   }
 
   Timer timer;
-  long long int count = 0;
-
   bool start_record = false;
   
   timer.start();
   
-  
 
-  float sum = 0;
-  record_key();
-  printf("Record finished\n");
-
-  // print the key_buffer
-  for(int i =0; i < 400; i++) {
-    // print gx gy gz individually
-    printf("point %d: gx %f gy %f gz %f\n", i, key_buffer[i++], key_buffer[i++], key_buffer[i++]);
-  }
 
   while (1) {
     
     //Until the user button is pressed for 2s, we will be reading the gyroscope
-    // if (user_button.read() == 0) {
-    //   timer.reset();
-    // } else {
-    //   if (timer.read() > 2) {
-    //     start_record = true;
-    //   }
-    // }
-
-    // if (!start_record) {
-    //   continue;
-    // }
-
-    //count 2 seconds, how many data points we have
-    if (timer.read() >= 2) {
+    if (user_button.read() == 0) {
       timer.reset();
-      printf("\nIn 2s, count: %lld\n", count);
-      printf("sum: %f\n", sum);
-      break;
-      
+    } else {
+      if (timer.read() > 2) {
+        start_record = true;
+      }
     }
 
-    // if (timer.read() > 2) {
-    //   timer.reset();
-    // }
-    int16_t raw_gx,raw_gy,raw_gz;
-    float gx, gy, gz;
-    
-    
+    if (start_record) {
+      printf("start recording\n");
+      record_key();
+      printf("finish recording\n");
+      // print_key_value();
+      start_record = false;
+      timer.reset();
+    }
+
     //wait until new sample is ready
     flags.wait_all(DATA_READY_FLAG);
     //prepare the write buffer to trigger a sequential read
@@ -180,19 +221,10 @@ int main() {
     spi.transfer(write_buf,7,read_buf,8,spi_cb,SPI_EVENT_COMPLETE );
     flags.wait_all(SPI_FLAG);
 
-    //read_buf after transfer: garbage byte, gx_low,gx_high,gy_low,gy_high,gz_low,gz_high
-    //Put the high and low bytes in the correct order lowB,Highb -> HighB,LowB
-
-
-    
-    ++count;
-    
-
-    // sum += ((gx - 0.01) * (gx - 0.01) + (gy - 0.01) * (gy - 0.01) + (gz - 0.01) * (gz - 0.01));
-    for (int i = 0; i < 400; i++) {
-      sum += ((key_buffer[i] - 0.01) * (key_buffer[i] - 0.01) + (key_buffer[i + 1] - 0.01) * (key_buffer[i + 1] - 0.01) + (key_buffer[i + 2] - 0.01) * (key_buffer[i + 2] - 0.01));
+    updata_real_time_buffer();
+    if (match_data()) {
+      printf("match\n");
     }
-    
     
     // printf("Actual|\tgx: %4.5f \t gy: %4.5f \t gz: %4.5f\n",gx,gy,gz);
   }
