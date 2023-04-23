@@ -1,5 +1,4 @@
 #include "mbed.h"
-#include "RecordKey.h"
 // Documents
 // Manual for dev board: https://www.st.com/resource/en/user_manual/um1670-discovery-kit-with-stm32f429zi-mcu-stmicroelectronics.pdf
 // gyroscope datasheet: https://www.mouser.com/datasheet/2/389/dm00168691-1798633.pdf
@@ -335,28 +334,40 @@ int main() {
   // }
 
   Timer timer;
-  timer.start();
+  long long int count = 0;
 
   bool start_record = false;
-
+  
+  timer.start();
+  
+  int16_t raw_gx,raw_gy,raw_gz;
+  float gx, gy, gz;
   while (1) {
-    int16_t raw_gx,raw_gy,raw_gz;
-    float gx, gy, gz;
+    ++count;
     //Until the user button is pressed for 2s, we will be reading the gyroscope
-    if (user_button.read() == 0) {
+    // if (user_button.read() == 0) {
+    //   timer.reset();
+    // } else {
+    //   if (timer.read() > 2) {
+    //     start_record = true;
+    //   }
+    // }
+
+    // if (!start_record) {
+    //   continue;
+    // }
+
+    //count 2 seconds, how many data points we have
+    if (timer.read() >= 2) {
       timer.reset();
-    } else {
-      if (timer.read() > 2) {
-        start_record = true;
-      }
+      printf("\nIn 2s, count: %lld\n", count);
+      break;
+      
     }
 
-    if (!start_record) {
-      continue;
-    }
-    if (timer.read() > 2) {
-      timer.reset();
-    }
+    // if (timer.read() > 2) {
+    //   timer.reset();
+    // }
 
     
     
