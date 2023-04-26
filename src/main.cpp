@@ -25,16 +25,16 @@ InterruptIn int2(PA_2,PullDown);
 #define DATA_READY_FLAG 2
 
 
-#define DATA_POINTS 400 
+#define DATA_POINTS 600 
 
-#define THRESHOLD 650
+#define THRESHOLD 1000
 
 
 uint8_t write_buf[32];
 uint8_t read_buf[32];
 
 
-constexpr int BUFFER_SIZE = 3 * DATA_POINTS; // 3 axes, 400 data points
+constexpr const int BUFFER_SIZE = 3 * DATA_POINTS; // 3 axes, 400 data points
 
 // Init this array as 0
 float key_buffer[BUFFER_SIZE] = {0};
@@ -92,6 +92,13 @@ bool match_data() {
 
 
 void record_key(){
+  {
+    // clean the custom line
+    display_string_at_line_n<CUSTOM_1>("          ");
+    display_string_at_line_n<CUSTOM_2>("          ");
+    display_string_at_line_n<CUSTOM_3>("          ");
+    display_string_at_line_n<CUSTOM_4>("          ");
+  }
   key_buffer_index = 0;
   float gx, gy, gz;
   float sum{0};
@@ -159,7 +166,7 @@ int main() {
   setup_background_layer();
   setup_foreground_layer();
   // call these above setup once
-  
+
   display_string_at_line_n<TITLE_1>("Welcome to the xxx");
   display_string_at_line_n<TITLE_2>("Press 2s to record");
   display_string_at_line_n<TITLE_3>("Will record %d points", DATA_POINTS);
