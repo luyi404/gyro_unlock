@@ -1,4 +1,5 @@
 #include "mbed.h"
+#include "display.hpp"
 // Documents
 // Manual for dev board: https://www.st.com/resource/en/user_manual/um1670-discovery-kit-with-stm32f429zi-mcu-stmicroelectronics.pdf
 // gyroscope datasheet: https://www.mouser.com/datasheet/2/389/dm00168691-1798633.pdf
@@ -24,14 +25,16 @@ InterruptIn int2(PA_2,PullDown);
 #define DATA_READY_FLAG 2
 
 
-#define BUFFER_SIZE 3 * 400 // 400 points, 3 axis
+#define DATA_POINTS 400 
 
-#define THRESHOLD 600
+#define THRESHOLD 650
 
 
 uint8_t write_buf[32];
 uint8_t read_buf[32];
 
+
+constexpr int BUFFER_SIZE = 3 * DATA_POINTS; // 3 axes, 400 data points
 
 // Init this array as 0
 float key_buffer[BUFFER_SIZE] = {0};
@@ -52,8 +55,6 @@ EventFlags flags;
 void spi_cb(int event){
   flags.set(SPI_FLAG);
   
- 
-
 };
 void data_cb(){
   flags.set(DATA_READY_FLAG);
@@ -85,7 +86,7 @@ bool match_data() {
     sum += (key_buffer[i] - real_time_buffer[avoid_overflow(i + real_time_buffer_index)]) * 
     (key_buffer[i] - real_time_buffer[avoid_overflow(i++ + real_time_buffer_index)]);
   }
-  // printf("Sum: %f\n", sum);
+  printf("Sum: %f\n", sum);
   return sum < THRESHOLD;
 }
 
@@ -111,7 +112,8 @@ void record_key(){
       key_buffer[key_buffer_index++] = gz;
       sum += gx * gx + gy * gy + gz * gz;
     } else {
-      printf("Recorded Sum: %f\n", sum);
+      // printf("Recorded Sum: %f\n", sum);
+      display_string_at_line_n<DATA_1>("Recorded Sum: %f\n", sum);
       break;
     }
   }
@@ -151,6 +153,17 @@ DigitalIn user_button(USER_BUTTON);
 int main() {
   // Setup the spi for 8 bit data, high steady state clock,
   // second edge capture, with a 1MHz clock rate
+
+
+  // SETUP FOR LCD DISPLAY
+  setup_background_layer();
+  setup_foreground_layer();
+  display_string_at_line_n<TITLE_1>("Welcome to the xxx");
+  display_string_at_line_n<TITLE_2>("Press 2s to record");
+  display_string_at_line_n<TITLE_3>("Will record %d points", DATA_POINTS);
+  display_string_at_line_n<CUSTOM_1>("No key recorded");
+
+
   spi.format(8,3);
   spi.frequency(1'000'000);
 
@@ -187,11 +200,11 @@ int main() {
 
   Timer timer;
   bool start_record = false;
+  bool have_key = false;
+  bool matched = false;
   
   timer.start();
   
-
-
   while (1) {
     
     //Until the user button is pressed for 2s, we will be reading the gyroscope
@@ -204,13 +217,32 @@ int main() {
     }
 
     if (start_record) {
-      printf("start recording\n");
+      have_key = true;
+      matched = false;
+      // printf("start recording\n");
+      {
+      // Clean up display line ACTION_1, ACTION_2, DATA_1, DATA_2
+      display_string_at_line_n<ACTION_1>("                 ");
+      display_string_at_line_n<ACTION_2>("                 ");
+      display_string_at_line_n<DATA_1>("                 ");
+      // sleep for 0.2s to show the clean up, hhh
+      thread_sleep_for(200);
+      }
+      
+      display_string_at_line_n<ACTION_1>("Start Recording");
       record_key();
-      printf("finish recording\n");
+      // printf("finish recording\n");
+      display_string_at_line_n<ACTION_2>("Finish Recording");
       // print_key_value();
       start_record = false;
       timer.reset();
     }
+    if(!have_key || matched) {
+      continue;
+    } else {
+      display_string_at_line_n<CUSTOM_1>("Wating for match");
+    }
+
 
     //wait until new sample is ready
     flags.wait_all(DATA_READY_FLAG);
@@ -223,7 +255,12 @@ int main() {
 
     updata_real_time_buffer();
     if (match_data()) {
-      printf("match\n");
+      // printf("match\n");
+      matched = true;
+      display_string_at_line_n<CUSTOM_1>("                   ");
+      display_string_at_line_n<CUSTOM_2>("Match!");
+      display_string_at_line_n<CUSTOM_3>("UNLOCK!");
+      display_string_at_line_n<CUSTOM_4>("BUT NOTHING HAPPENED");
     }
     
     // printf("Actual|\tgx: %4.5f \t gy: %4.5f \t gz: %4.5f\n",gx,gy,gz);
