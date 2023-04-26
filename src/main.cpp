@@ -158,6 +158,8 @@ int main() {
   // SETUP FOR LCD DISPLAY
   setup_background_layer();
   setup_foreground_layer();
+  // call these above setup once
+  
   display_string_at_line_n<TITLE_1>("Welcome to the xxx");
   display_string_at_line_n<TITLE_2>("Press 2s to record");
   display_string_at_line_n<TITLE_3>("Will record %d points", DATA_POINTS);
