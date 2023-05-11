@@ -25,6 +25,7 @@ InterruptIn int2(PA_2,PullDown);
 #define SPI_FLAG 1
 #define DATA_READY_FLAG 2
 
+#define FILTER_SIZE 10
 
 #define DATA_POINTS 600 
 
@@ -51,6 +52,11 @@ float real_time_buffer[BUFFER_SIZE] = {0};
 
 int real_time_buffer_index = 0; // Used to index the real_time_buffer.
 
+// mean filter
+float mean_filter_x[FILTER_SIZE] = {0};
+float mean_filter_y[FILTER_SIZE] = {0};
+float mean_filter_z[FILTER_SIZE] = {0};
+int filter_index = 0;
 
 
 EventFlags flags;
@@ -65,6 +71,14 @@ void data_cb(){
 
 };
 
+float get_mean_f(float* arr, int size) {
+  float sum{0};
+  for (int i = 0; i < size; ++i) {
+    sum += arr[i];
+  }
+  return sum / size;
+}
+
 void get_data(uint8_t* read_buf, float& gx, float& gy, float& gz) {
   //read_buf after transfer: garbage byte, gx_low,gx_high,gy_low,gy_high,gz_low,gz_high
   //Put the high and low bytes in the correct order lowB,Highb -> HighB,LowB
@@ -72,6 +86,16 @@ void get_data(uint8_t* read_buf, float& gx, float& gy, float& gz) {
   raw_gx=( ( (uint16_t)read_buf[2] ) <<8 ) | ( (uint16_t)read_buf[1] );
   raw_gy=( ( (uint16_t)read_buf[4] ) <<8 ) | ( (uint16_t)read_buf[3] );
   raw_gz=( ( (uint16_t)read_buf[6] ) <<8 ) | ( (uint16_t)read_buf[5] );
+
+  // Add mean filter to the data
+  mean_filter_x[filter_index] = (float)raw_gx;
+  mean_filter_y[filter_index] = (float)raw_gy;
+  mean_filter_z[filter_index] = (float)raw_gz;
+  filter_index = (filter_index + 1) % FILTER_SIZE;
+  raw_gx = get_mean_f(mean_filter_x, FILTER_SIZE);
+  raw_gy = get_mean_f(mean_filter_y, FILTER_SIZE);
+  raw_gz = get_mean_f(mean_filter_z, FILTER_SIZE);
+
   gx=((float)raw_gx)*(17.5f*0.017453292519943295769236907684886f / 1000.0f);
   gy=((float)raw_gy)*(17.5f*0.017453292519943295769236907684886f / 1000.0f);
   gz=((float)raw_gz)*(17.5f*0.017453292519943295769236907684886f / 1000.0f);
