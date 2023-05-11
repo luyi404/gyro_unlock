@@ -55,7 +55,7 @@ uint16_t mapPixelY(float inputY,float minVal, float maxVal, int32_t minPixelY, i
 }
 
 
-// ABOVE if from the LCD display example
+// ABOVE is from the LCD display example
 
 template <std::size_t line>
 void display_string_at_line_n(const char *ptr,  ...) {

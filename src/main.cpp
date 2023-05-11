@@ -1,5 +1,6 @@
 #include "mbed.h"
 #include "display.hpp"
+
 // Documents
 // Manual for dev board: https://www.st.com/resource/en/user_manual/um1670-discovery-kit-with-stm32f429zi-mcu-stmicroelectronics.pdf
 // gyroscope datasheet: https://www.mouser.com/datasheet/2/389/dm00168691-1798633.pdf
@@ -27,7 +28,10 @@ InterruptIn int2(PA_2,PullDown);
 
 #define DATA_POINTS 600 
 
-#define THRESHOLD 1000
+// #define THRESHOLD 1000
+int threshold{0};
+
+#define MINIMUM_RECORD_THRESHOLD 1000
 
 
 uint8_t write_buf[32];
@@ -86,12 +90,13 @@ bool match_data() {
     sum += (key_buffer[i] - real_time_buffer[avoid_overflow(i + real_time_buffer_index)]) * 
     (key_buffer[i] - real_time_buffer[avoid_overflow(i++ + real_time_buffer_index)]);
   }
-  printf("Sum: %f\n", sum);
-  return sum < THRESHOLD;
+  // printf("Sum: %f\n", sum);
+  printf(">sum:%f\n", sum);
+  return sum < threshold;
 }
 
 
-void record_key(){
+bool record_key(){
   {
     // clean the custom line
     display_string_at_line_n<CUSTOM_1>("          ");
@@ -120,8 +125,15 @@ void record_key(){
       sum += gx * gx + gy * gy + gz * gz;
     } else {
       // printf("Recorded Sum: %f\n", sum);
-      display_string_at_line_n<DATA_1>("Recorded Sum: %f\n", sum);
-      break;
+      display_string_at_line_n<DATA_1>("Recorded Sum: %f", sum);
+      printf(">rsum:%f\n", sum);
+      if (sum >= MINIMUM_RECORD_THRESHOLD) {
+        threshold = sum * 0.25;
+        display_string_at_line_n<CUSTOM_4>("Threshold: %d", threshold);
+        return true;
+      } else {
+        return false;
+      }
     }
   }
 }
@@ -226,7 +238,6 @@ int main() {
     }
 
     if (start_record) {
-      have_key = true;
       matched = false;
       // printf("start recording\n");
       {
@@ -239,12 +250,18 @@ int main() {
       }
       
       display_string_at_line_n<ACTION_1>("Start Recording");
-      record_key();
-      // printf("finish recording\n");
-      display_string_at_line_n<ACTION_2>("Finish Recording");
-      // print_key_value();
-      start_record = false;
-      timer.reset();
+      if(record_key()){
+        // printf("finish recording\n");
+        display_string_at_line_n<ACTION_2>("Finish Recording");
+        have_key = true;
+        // print_key_value();
+      } else {
+        display_string_at_line_n<ACTION_2>("Too Simple Try Again");
+        display_string_at_line_n<ACTION_1>("");
+        have_key = false;
+      }
+        start_record = false;
+        timer.reset();
     }
     if(!have_key || matched) {
       continue;
