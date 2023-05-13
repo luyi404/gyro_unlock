@@ -172,7 +172,7 @@ bool record_key(){
       // if the recording is too simple, return false, recording failed 
       // if success, save dynamic matching threshold as sum * 0.25
       if (sum >= MINIMUM_RECORD_THRESHOLD) {
-        threshold = sum * 0.25;
+        threshold = sum * 0.35;
         return true;
       } else {
         return false;
@@ -346,7 +346,7 @@ int main() {
     
     // wait until the user hits the button
     if (ready_to_record) {
-        while (!detect_touch());
+        while (!detect_touch() && !user_button.read());
         start_record = true;
         ready_to_record = false;
     }
